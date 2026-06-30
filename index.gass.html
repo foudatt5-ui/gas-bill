@@ -1,0 +1,441 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- وسم المنفست المدمج (Manifest Data URI) لجعل التطبيق قابلاً للتثبيت -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"حاسبة فاتورة الغاز ","short_name":"فاتورة الغاز","description":"تطبيق لحساب فواتير الغاز الطبيعي في مصر","start_url":".","display":"standalone","background_color":"#022c22","theme_color":"#022c22","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/1048/1048953.png","sizes":"512x512","type":"image/png"}]}'>
+    
+    <!-- وسم لون شريط المتصفح وتوافق آيفون -->
+    <meta name="theme-color" content="#022c22">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="فاتورة الغاز">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1048/1048953.png">
+
+    <title>اعرف فاتورتك الغاز الطبيعي - ا. احمد فوده</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background: #022c22; 
+            color: #1e293b;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 15px;
+            overflow-x: hidden;
+        }
+        .neu-card {
+            background: rgba(240, 253, 244, 0.98);
+            backdrop-filter: blur(10px);
+            border-radius: 35px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .neu-input {
+            background: #f0fdf4;
+            border: none;
+            box-shadow: inset 4px 4px 10px #d1d8d1, inset -4px -4px 10px #ffffff;
+            transition: all 0.3s ease;
+        }
+        .btn-base {
+            padding: 1rem;
+            border-radius: 1rem;
+            font-weight: 900;
+            font-size: 1.125rem;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            border-bottom: 4px solid transparent;
+            cursor: pointer;
+        }
+        .btn-base:active {
+            transform: translateY(2px);
+            border-bottom-width: 1px;
+        }
+        .btn-light-green { background-color: #bbf7d0; color: #166534; border-color: #86efac; }
+        .btn-light-green:hover { background-color: #86efac; }
+        .btn-red { background-color: #ef4444; color: white; border-color: #b91c1c; }
+        .btn-red:hover { background-color: #f87171; }
+        
+        .result-card-themed {
+            background: #ffffff;
+            border: 2px solid #86efac; 
+            border-radius: 26px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        #splashScreen {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, #064e3b 0%, #022c22 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.8s ease;
+        }
+        .signature-font {
+            font-weight: 900;
+            background: linear-gradient(to bottom, #fde047, #eab308);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .loader {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #ffffff33;
+            border-bottom-color: #fde047;
+            border-radius: 50%;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .animate-fade { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .diary-item {
+            background: white;
+            border-radius: 15px;
+            padding: 12px;
+            margin-bottom: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #customAlert {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 3000;
+            background: #ffffff;
+            padding: 15px 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border-right: 5px solid #10b981;
+            width: 90%;
+            max-width: 350px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="customAlert" class="animate-fade">
+        <p id="alertMsg" class="font-bold text-gray-800 text-sm"></p>
+    </div>
+
+    <div id="splashScreen">
+        <div class="text-white text-center space-y-6 animate-fade">
+            <div class="space-y-1">
+                <h2 class="text-3xl font-black italic tracking-tighter">اعرف فاتورتك الغاز الطبيعي</h2>
+                <p class="text-emerald-300 font-medium text-xs">Smart Energy Management</p>
+            </div>
+            <div class="pt-8 border-t border-white/10">
+                <p class="text-gray-400 text-xs mb-1 uppercase tracking-widest">تصميم و تطوير</p>
+                <p class="signature-font text-2xl italic">ا. احمد عادل فوده</p>
+            </div>
+            <div class="pt-4 flex flex-col items-center">
+                <div class="loader"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="mainWrapper" class="w-full max-w-md relative z-10 opacity-0 transition-opacity duration-700 space-y-8">
+        <div class="neu-card p-6 md:p-8 space-y-6">
+            <div class="text-center space-y-2">
+                <h1 class="text-2xl font-black text-gray-800">حاسبة فاتورة الغاز</h1>
+                <p class="text-emerald-600 text-sm font-bold uppercase tracking-widest italic">ا. احمد فوده</p>
+            </div>
+
+            <div class="space-y-4">
+                <div class="flex justify-between items-center px-1">
+                    <label class="text-emerald-800 font-bold text-sm italic">أدخل عدد الأمتار المكعبة :</label>
+                    <span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-black">م³</span>
+                </div>
+                <input type="number" id="consumption" inputmode="decimal" placeholder="0" step="0.1" 
+                       class="neu-input w-full px-4 py-4 rounded-2xl text-center text-4xl font-black text-emerald-900 outline-none focus:ring-2 ring-emerald-300">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="calculateBill()" class="btn-base btn-light-green shadow-sm">
+                        <span>احسب</span>
+                    </button>
+                    <button onclick="saveToDiary()" class="btn-base btn-light-green shadow-sm">
+                        <span>تدوين</span>
+                    </button>
+                </div>
+                <button onclick="resetApp()" class="btn-base btn-light-green w-full text-sm py-3 opacity-80">
+                    <span>فاتورة جديدة</span>
+                </button>
+            </div>
+
+            <div id="resultBox" class="hidden result-card-themed p-5 space-y-5 animate-fade">
+                <div class="text-center bg-green-50/50 p-4 rounded-xl border border-green-100">
+                    <p class="text-emerald-700 text-[10px] font-black uppercase mb-1">المبلغ المطلوب سداده</p>
+                    <div class="text-5xl font-black text-blue-800 leading-none py-2">
+                        <span id="totalDisplay">0</span> <span class="text-lg">ج.م</span>
+                    </div>
+                    <p class="text-[10px] text-blue-800/70 font-bold mt-1 italic border-t border-green-200 pt-2">
+                        شامل الرسوم والدمغات والتقريب
+                    </p>
+                </div>
+
+                <div class="pt-2 border-t border-green-200">
+                    <button id="aiBtn" onclick="analyzeUsageWithAI()" class="btn-base btn-light-green w-full text-sm">
+                        <span>✨ تحليل الاستهلاك</span>
+                    </button>
+                    <div id="aiResponse" class="hidden text-right bg-white/80 p-3 mt-2 rounded-lg text-blue-900 text-xs leading-relaxed border border-green-100 shadow-inner"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="diarySection" class="hidden space-y-6 animate-fade">
+            <div class="neu-card p-6 md:p-8 space-y-6">
+                <div class="text-center border-b border-emerald-100 pb-4">
+                    <h2 class="text-xl font-black text-emerald-800">سجل الاستهلاك الزمني</h2>
+                    <p class="text-gray-400 text-[10px]">يظهر تطور استهلاكك تاريخياً</p>
+                </div>
+
+                <div class="bg-white p-3 rounded-2xl shadow-inner border border-gray-100 h-64">
+                    <canvas id="consumptionChart"></canvas>
+                </div>
+
+                <div class="space-y-3 overflow-y-auto max-h-80 pr-1" id="diaryList"></div>
+
+                <button onclick="clearDiary()" class="btn-base btn-red w-full py-3 text-sm">
+                    <span>🗑️ مسح كل السجلات</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="pb-10 text-center">
+            <button onclick="exitApp()" class="text-emerald-100 opacity-60 font-bold text-xs hover:opacity-100 transition-colors">خروج نهائي من البرنامج</button>
+        </div>
+    </div>
+
+    <div id="finalScreen" class="fixed inset-0 bg-emerald-950 hidden flex-col items-center justify-center p-8 z-[2000] text-center">
+        <div id="finalCard" class="bg-white rounded-[50px] p-10 max-w-sm w-full shadow-2xl space-y-8 animate-fade">
+            <h2 class="text-2xl font-black text-gray-900">تم الخروج بنجاح</h2>
+            <div class="space-y-4 text-right">
+                <div class="p-5 bg-emerald-50 rounded-2xl border border-emerald-100">
+                    <p class="text-emerald-500 font-black text-[10px] uppercase mb-1">حقوق الملكية</p>
+                    <p class="text-emerald-900 text-xl font-black">ا. احمد فوده</p>
+                </div>
+                <div class="p-5 bg-blue-50 rounded-2xl border border-blue-100">
+                    <p class="text-blue-400 text-[9px] font-black uppercase mb-1">Design & Programming</p>
+                    <p class="text-blue-900 text-lg font-black uppercase tracking-wide">Ahmed Adel Fouda</p>
+                </div>
+            </div>
+            <button onclick="location.reload()" class="btn-base btn-light-green w-full">فتح مجدداً</button>
+            <p class="text-gray-400 text-[9px] italic">© 2026 All Rights Reserved</p>
+        </div>
+    </div>
+
+    <script>
+        let myChart = null;
+        let diaryEntries = JSON.parse(localStorage.getItem('gasDiary')) || [];
+
+        function showAlert(msg, isError = false) {
+            const alertBox = document.getElementById('customAlert');
+            const alertMsg = document.getElementById('alertMsg');
+            alertMsg.innerText = msg;
+            alertBox.style.borderRightColor = isError ? '#ef4444' : '#10b981';
+            alertBox.style.display = 'block';
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 3000);
+        }
+
+        window.onload = function() {
+            // تسجيل Service Worker بسيط لتفعيل إمكانية التثبيت كـ PWA
+            if ('serviceWorker' in navigator) {
+                const swCode = `self.addEventListener('fetch', function(event) {});`;
+                const blob = new Blob([swCode], {type: 'application/javascript'});
+                const swUrl = URL.createObjectURL(blob);
+                navigator.serviceWorker.register(swUrl).catch(err => console.log("PWA SW Register Error"));
+            }
+
+            setTimeout(() => {
+                const splash = document.getElementById('splashScreen');
+                splash.style.opacity = '0';
+                setTimeout(() => {
+                    splash.style.display = 'none';
+                    document.getElementById('mainWrapper').style.opacity = '1';
+                    initChart();
+                    renderDiary();
+                }, 800);
+            }, 2500);
+        };
+
+        function calculateBill() {
+            const input = document.getElementById('consumption');
+            const consumption = parseFloat(input.value);
+            
+            if (isNaN(consumption) || consumption < 0) {
+                showAlert("برجاء إدخال عدد أمتار صحيح", true);
+                return;
+            }
+
+            let gasCost = 0;
+            if (consumption <= 30) {
+                gasCost = consumption * 6;
+            } else if (consumption <= 60) {
+                gasCost = (30 * 6) + ((consumption - 30) * 8);
+            } else {
+                gasCost = (30 * 6) + (30 * 8) + ((consumption - 60) * 9);
+            }
+
+            const fees = 17.5 + (consumption * 0.04); 
+            const total = Math.ceil(gasCost + fees);
+            
+            document.getElementById('totalDisplay').innerText = total.toLocaleString('ar-EG');
+            document.getElementById('resultBox').classList.remove('hidden');
+            document.getElementById('aiResponse').classList.add('hidden');
+        }
+
+        function saveToDiary() {
+            const meters = document.getElementById('consumption').value;
+            const price = document.getElementById('totalDisplay').innerText;
+            
+            if(!meters || price === "0") {
+                showAlert("يرجى حساب الفاتورة أولاً قبل التدوين", true);
+                return;
+            }
+            
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' });
+            const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+
+            const entry = { 
+                id: Date.now(), 
+                date: dateStr, 
+                time: timeStr, 
+                meters: parseFloat(meters), 
+                price: price 
+            };
+            
+            diaryEntries.push(entry);
+            if (diaryEntries.length > 20) diaryEntries.shift();
+            localStorage.setItem('gasDiary', JSON.stringify(diaryEntries));
+            
+            renderDiary();
+            updateChart();
+            document.getElementById('diarySection').classList.remove('hidden');
+            showAlert("تم حفظ القراءة بنجاح");
+        }
+
+        function renderDiary() {
+            const list = document.getElementById('diaryList');
+            list.innerHTML = '';
+            if (diaryEntries.length === 0) {
+                document.getElementById('diarySection').classList.add('hidden');
+                return;
+            }
+            document.getElementById('diarySection').classList.remove('hidden');
+            [...diaryEntries].reverse().forEach((entry) => {
+                const item = document.createElement('div');
+                item.className = 'diary-item border-r-4 border-emerald-500';
+                item.innerHTML = `
+                    <div class="text-right">
+                        <p class="font-black text-emerald-900 text-sm">${entry.meters} متر مكعب</p>
+                        <p class="text-[10px] text-gray-400">${entry.date} الساعة ${entry.time}</p>
+                    </div>
+                    <div class="text-left">
+                        <p class="font-black text-blue-800">${entry.price} ج.م</p>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('consumptionChart').getContext('2d');
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: diaryEntries.map(e => e.date),
+                    datasets: [{
+                        label: 'الاستهلاك',
+                        data: diaryEntries.map(e => e.meters),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#064e3b'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#f3f4f6' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function updateChart() {
+            if (myChart) {
+                myChart.data.labels = diaryEntries.map(e => e.date);
+                myChart.data.datasets[0].data = diaryEntries.map(e => e.meters);
+                myChart.update();
+            }
+        }
+
+        function resetApp() {
+            document.getElementById('consumption').value = '';
+            document.getElementById('resultBox').classList.add('hidden');
+            document.getElementById('totalDisplay').innerText = '0';
+        }
+
+        function clearDiary() {
+            if(confirm('هل تود حقاً حذف جميع سجلات الاستهلاك السابقة؟')) {
+                diaryEntries = [];
+                localStorage.removeItem('gasDiary');
+                renderDiary();
+                updateChart();
+                showAlert("تم حذف السجل بالكامل");
+            }
+        }
+
+        function analyzeUsageWithAI() {
+            const val = parseFloat(document.getElementById('consumption').value);
+            const responseDiv = document.getElementById('aiResponse');
+            responseDiv.classList.remove('hidden');
+            let msg = "";
+            if (val <= 30) {
+                msg = "استهلاكك مثالي وضمن الشريحة الأولى المدعومة. استمر في ترشيد الاستهلاك للحفاظ على هذه التكلفة.";
+            } else if (val <= 60) {
+                msg = "استهلاكك متوسط (الشريحة الثانية). حاول تقليل استخدام السخان أو الفرن في أوقات الذروة لتجنب الشريحة الأعلى.";
+            } else {
+                msg = "استهلاكك مرتفع ودخل في الشريحة الثالثة. ننصح بفحص الأجهزة للتأكد من كفاءتها وعدم وجود هدر غير مبرر.";
+            }
+            responseDiv.innerText = "رأي المحلل أحمد فودة: " + msg;
+        }
+
+        function exitApp() {
+            document.getElementById('mainWrapper').style.opacity = '0';
+            setTimeout(() => {
+                const final = document.getElementById('finalScreen');
+                final.classList.remove('hidden');
+                final.style.display = 'flex';
+            }, 500);
+        }
+    </script>
+</body>
+</html>
